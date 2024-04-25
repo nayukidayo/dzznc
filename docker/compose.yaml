@@ -1,0 +1,16 @@
+services:
+  app:
+    restart: always
+    image: nayukidayo/dzznc:latest
+    logging:
+      driver: local
+    ports:
+      - '37211:3000'
+    environment:
+      - MQTT_URL=
+      - MQTT_USER=
+      - MQTT_PASS=
+      - HTTPS_CRT=
+      - HTTPS_KEY=
+    volumes:
+      - ./cert:/app/cert
