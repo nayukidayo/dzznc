@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import mqtt from 'mqtt'
 import { setSV, getSV } from './sv.js'
-import { setPUMP, getPUMP } from './pump.js'
+import { setPUMPlocal, setPUMPremote, getPUMP } from './pump.js'
 
 const env = {
   MQTT_URL: process.env.MQTT_URL || 'mqtt://test.nayuki.top',
@@ -63,7 +63,7 @@ client.on('message', (topic, msg) => {
     case pump.sub:
       cache.pump = getPUMP(msg)
       if (cache.pump?.mode === 'local') {
-        const msg = setPUMP(cache.pump.coils)
+        const msg = setPUMPlocal(cache.pump.coils)
         msg && client.publish(pump.pub, msg, { qos: 1 })
       }
       break
@@ -119,7 +119,7 @@ function setStatus(req, res) {
         if (!msg) throw new Error('sv2 msg is empty')
         await client.publishAsync(sv2.pub, msg, { qos: 1 })
       } else if (data.tab === 'pump') {
-        const msg = setPUMP(data.coils, data.status)
+        const msg = setPUMPremote(data.coils, data.status)
         if (!msg) throw new Error('pump msg is empty')
         await client.publishAsync(pump.pub, msg, { qos: 1 })
       } else {
