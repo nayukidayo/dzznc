@@ -52,25 +52,32 @@ client.on('connect', async () => {
   }
 })
 
-client.on('message', (topic, msg) => {
-  switch (topic) {
-    case sv1.sub:
-      cache.sv1 = getSV(msg, true)
-      break
-    case sv2.sub:
-      cache.sv2 = getSV(msg)
-      break
-    case pump.sub:
-      cache.pump = getPUMP(msg)
-      if (cache.pump?.mode === 'local') {
-        const msg = setPUMPlocal(cache.pump.coils)
-        msg && client.publish(pump.pub, msg, { qos: 1 })
-      }
-      break
+client.on('message', async (topic, msg) => {
+  try {
+    switch (topic) {
+      case sv1.sub:
+        cache.sv1 = getSV(msg, true)
+        break
+      case sv2.sub:
+        cache.sv2 = getSV(msg)
+        break
+      case pump.sub:
+        cache.pump = getPUMP(msg)
+        if (cache.pump?.mode === 'local') {
+          const msg = setPUMPlocal(cache.pump.coils)
+          if (msg) {
+            await delay(1e3)
+            await client.publishAsync(pump.pub, msg, { qos: 1 })
+          }
+        }
+        break
+    }
+  } catch (err) {
+    console.log('[mqtt_message]', err)
   }
 })
 
-client.on('error', err => console.log('[mqtt_client_error]', err))
+client.on('error', err => console.log('[mqtt_error]', err))
 
 const server = createServer(options, (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
