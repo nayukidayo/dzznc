@@ -1,6 +1,5 @@
 import { createServer } from 'node:https'
 import { readFileSync } from 'node:fs'
-import { EventEmitter } from 'node:events'
 import process from 'node:process'
 import mqtt from 'mqtt'
 import { setSV, getSV } from './sv.js'
@@ -35,10 +34,13 @@ const pump = {
   get: Buffer.from('010400000004F1C9', 'hex'),
 }
 
-const ee = new EventEmitter()
+const cache = {}
 const delay = ms => new Promise(res => setTimeout(res, ms))
 
-const client = mqtt.connect(env.MQTT_URL, { username: env.MQTT_USER, password: env.MQTT_PASS })
+const client = mqtt.connect(env.MQTT_URL, {
+  username: env.MQTT_USER,
+  password: env.MQTT_PASS,
+})
 
 client.on('connect', async () => {
   await client.subscribeAsync([sv1.sub, sv2.sub, pump.sub])
@@ -51,63 +53,52 @@ client.on('connect', async () => {
 })
 
 client.on('message', (topic, msg) => {
-  let result
   switch (topic) {
     case sv1.sub:
-      result = getSV(msg, true)
+      cache.sv1 = getSV(msg, true)
       break
     case sv2.sub:
-      result = getSV(msg)
+      cache.sv2 = getSV(msg)
       break
-    default:
-      result = getPUMP(msg)
-      if (result?.mode === 'local') {
-        const msg = setPUMP(result.coils)
+    case pump.sub:
+      cache.pump = getPUMP(msg)
+      if (cache.pump?.mode === 'local') {
+        const msg = setPUMP(cache.pump.coils)
         msg && client.publish(pump.pub, msg, { qos: 1 })
       }
       break
   }
-  result && ee.emit('live', topic, result)
 })
 
 client.on('error', err => console.log('[mqtt_client_error]', err))
 
 const server = createServer(options, (req, res) => {
-  if (req.method === 'GET') {
-    // if (req.url === '/') {
-    //   res.writeHead(200, { 'Content-Type': 'text/html' })
-    //   createReadStream('test/index.html').pipe(res)
-    //   return
-    // }
+  const url = new URL(req.url, `http://${req.headers.host}`)
 
-    if (req.url === '/api/status') {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-store',
-      })
-      const cb = (topic, result) => {
-        res.write(`event: ${topic}\n`)
-        res.write(`data: ${JSON.stringify(result)}\n\n`)
-      }
-      ee.on('live', cb)
-      res.once('close', () => ee.off('live', cb))
-      return
-    }
+  if (req.headers.authorization !== 'nayukidayo') {
+    res.statusCode = 401
+    res.end()
+    return
+  }
+
+  if (url.pathname !== '/api/status') {
+    res.statusCode = 404
+    res.end()
+    return
+  }
+
+  if (req.method === 'GET') {
+    const tab = url.searchParams.get('tab')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify(cache[tab]))
+    return
   }
 
   if (req.method === 'POST') {
-    if (req.headers.authorization !== 'nayukidayo') {
-      res.statusCode = 401
-      res.end()
-      return
-    }
-
-    if (req.url === '/api/status') {
-      return setStatus(req, res)
-    }
+    return setStatus(req, res)
   }
 
-  res.statusCode = 404
+  res.statusCode = 405
   res.end()
 })
 
@@ -119,21 +110,20 @@ function setStatus(req, res) {
   req.on('end', async () => {
     try {
       const data = JSON.parse(Buffer.concat(buf).toString())
-      if (data.event === sv1.sub) {
+      if (data.tab === 'sv1') {
         const msg = setSV(data.coils, true)
         if (!msg) throw new Error('sv1 msg is empty')
         await client.publishAsync(sv1.pub, msg, { qos: 1 })
-      } else if (data.event === sv2.sub) {
+      } else if (data.tab === 'sv2') {
         const msg = setSV(data.coils)
         if (!msg) throw new Error('sv2 msg is empty')
         await client.publishAsync(sv2.pub, msg, { qos: 1 })
-      } else if (data.event === pump.sub) {
+      } else if (data.tab === 'pump') {
         const msg = setPUMP(data.coils)
-        console.log('msg', msg)
         if (!msg) throw new Error('pump msg is empty')
         await client.publishAsync(pump.pub, msg, { qos: 1 })
       } else {
-        throw new Error('unknown event')
+        throw new Error('unknown tab')
       }
       res.statusCode = 200
     } catch (err) {
