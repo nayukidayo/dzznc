@@ -119,7 +119,7 @@ function setStatus(req, res) {
         if (!msg) throw new Error('sv2 msg is empty')
         await client.publishAsync(sv2.pub, msg, { qos: 1 })
       } else if (data.tab === 'pump') {
-        const msg = setPUMP(data.coils)
+        const msg = setPUMP(data.coils, data.status)
         if (!msg) throw new Error('pump msg is empty')
         await client.publishAsync(pump.pub, msg, { qos: 1 })
       } else {
