@@ -1,6 +1,6 @@
 services:
   app:
-    restart: always
+    restart: unless-stopped
     image: nayukidayo/dzznc:latest
     logging:
       driver: local
@@ -10,7 +10,3 @@ services:
       - MQTT_URL=
       - MQTT_USER=
       - MQTT_PASS=
-      - HTTPS_CRT=
-      - HTTPS_KEY=
-    volumes:
-      - ./cert:/app/cert

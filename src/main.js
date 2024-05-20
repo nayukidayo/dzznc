@@ -1,21 +1,13 @@
-import { createServer } from 'node:https'
-import { readFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import process from 'node:process'
 import mqtt from 'mqtt'
 import { setSV, getSV } from './sv.js'
 import { setPUMPlocal, setPUMPremote, getPUMP } from './pump.js'
 
 const env = {
-  MQTT_URL: process.env.MQTT_URL || 'mqtt://test.nayuki.top',
+  MQTT_URL: process.env.MQTT_URL || 'mqtt://10.0.0.3',
   MQTT_USER: process.env.MQTT_USER || 'iot',
   MQTT_PASS: process.env.MQTT_PASS || '123',
-  HTTPS_CRT: process.env.HTTPS_CRT || 'cert/test.nayuki.top.key',
-  HTTPS_KEY: process.env.HTTPS_KEY || 'cert/test.nayuki.top.crt',
-}
-
-const options = {
-  key: readFileSync(env.HTTPS_CRT),
-  cert: readFileSync(env.HTTPS_KEY),
 }
 
 const sv1 = {
@@ -79,8 +71,8 @@ client.on('message', async (topic, msg) => {
 
 client.on('error', err => console.log('[mqtt_error]', err))
 
-const server = createServer(options, (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`)
+const server = createServer((req, res) => {
+  const url = new URL(req.url || '', `http://${req.headers.host}`)
 
   if (req.headers.authorization !== 'nayukidayo') {
     res.statusCode = 401
